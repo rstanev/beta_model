@@ -18,6 +18,7 @@
 # STEP L
 # Loading necessary libraries
 # location: C:\Users\v-rostan\source\repos\Playground_Beta\Playground_Beta
+# at VM C:\Users\v-rostan\ds\beta_model
 
 print(__doc__)
 import scipy
@@ -25,7 +26,7 @@ import collections
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
+#import statsmodels.api as sm
 import seaborn as sns
 import itertools
 import shap
@@ -520,7 +521,7 @@ loss = make_scorer(hrd_custom_loss_func, greagter_is_better = False)
 # select * from [Zeus_Intermediate].[dbo].[vw_Fact_HRDEA_DS] 
 # 
 ############################################################################################
-source_file = "C:\\Users\\v-rostan\\Documents\\HRD\\target_clean_FBQ.csv"
+source_file = "G:\\Datascience\\target_clean_FBQ.csv"
 data = read_csv(source_file, encoding = "ISO-8859-1")
 
 df = pd.DataFrame(data)
@@ -723,7 +724,7 @@ v_df = data.loc[Y_test.index]
 v_df['Prediction'] = predictions
 v_df = v_df.merge(pd.DataFrame(Y_test), how='inner', validate='one_to_one', left_index=True, right_index=True)
 # Output - saving to file
-v_df.to_csv("C:\\Users\\v-rostan\\Documents\\HRD\\beta_testset.csv")
+v_df.to_csv("C:\\Users\\v-rostan\\beta_testset.csv")
 #
 
 ####################################################################################################
