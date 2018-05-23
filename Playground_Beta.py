@@ -799,6 +799,8 @@ v_df = v_df.merge(pd.DataFrame(Y_test), how='inner', validate='one_to_one', left
 # Output - saving to file
 v_df.to_csv("C:\\Users\\v-rostan\\beta_testset.csv")
 #
+#df.to_csv("C:\\Users\\v-rostan\\beta_df.csv")
+#X_test.to_csv("C:\\Users\\v-rostan\\beta_X_test.csv")
 
 ####################################################################################################
 # Summarizing the number of manually flagged deals that the classifier was able to properly identify
@@ -905,9 +907,9 @@ print('Stop 2 of 5')
 # Integer representing which observation we would like to examine feature contributions
 # for classification
 #
-observation_index = 425
+observation_index = 1 #500 #1397 #425
 
-rescaledValidationX_one = scaler.transform(X_train_resampled.iloc[observation_index:observation_index+1])
+rescaledValidationX_one = scaler.transform(df[train_cols].iloc[observation_index:observation_index+1])
 rescaledValidationX_one = selector.transform(rescaledValidationX_one)
 class_result = model.predict(rescaledValidationX_one)
 
@@ -943,7 +945,7 @@ class_names = ['Risk = {}'.format(s) for s in ('Flag', 'High', 'Low')]
 
 # Name of feature for examining all its values in relatio to its importances
 # for classifications
-feat_name_ = 'Discount Amount'
+feat_name_ = 'Enrollment Discount Amount'
 
 #for i in range(len(colours)):
 #    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
