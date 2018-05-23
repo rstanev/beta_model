@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 #import statsmodels.api as sm
 import seaborn as sns
 import itertools
+import re
 import shap
 #import graphviz
 #from imblearn.combine import SMOTEENN
@@ -518,99 +519,171 @@ loss = make_scorer(hrd_custom_loss_func, greagter_is_better = False)
 # STEP 1
 # Load dataset
 # ------------ SQL Query ------------------
-# select * from [Zeus_Intermediate].[dbo].[vw_Fact_HRDEA_DS] 
+# select * from [Zeus_Intermediate].[DS].[Fact_HRDEA_DS] where [First Billed Quarter] >= 'FY16-Q4'
+# 
+# data frozen on 05/18/2018 and available at G:\Datascience\Fact_HRDEA_DS_05182018.csv  
 # 
 ############################################################################################
-source_file = "G:\\Datascience\\target_clean_FBQ.csv"
+source_file = "G:\\Datascience\\Fact_HRDEA_DS_05182018.csv"
 data = read_csv(source_file, encoding = "ISO-8859-1")
 
+# Load source data as pandas data frame
 df = pd.DataFrame(data)
-df.fillna(value=0, inplace=True)
-colnames = df.columns.values
+
+# Potential features from raw data
+df = df[['Enrollment/Term', 'First Billed Date', 'First Billed Month', 'First Billed Quarter', 'Quarter', 
+		 'Flagged', 'SystemFlagged', 'ManuallyFlagged', 
+		 'Subsidiary', 'Sub-Segment', 'Cluster', 'Area', 'Region', 'Sub-Region', 'Sector',    
+         'GeoRiskTier', 'Customer TPID', 'Reseller TPID', 'Product',
+		 'Account Manager', 'Industry', 'Vertical', 'Government Entity', 'SOE Business Contry', 'Super RSD', 
+		 'Contract Value', 'Discount Amount', 'Discount Percentage', 
+		 'Enrollment Contract Value', 'Enrollment Discount Amount', 'Enrollment Discount Percentage', 
+		 'Cloud vs On-Prem', 'Renewal vs New', 'Platform vs Component', 'SOE Flag', 
+		 'Partner GOV SOE Conc', 'Partner SOE Total Conc', 'Partner Max Previous 8 qtr Conc',  
+		 'Average Risk Score', 'Geo Risk Score', 'SOE Risk Score', 'Partner Risk Score', 'Large Discount Risk Score', 
+         'Discount Trend Risk Score', 'Flagged In HRDD', 'Manually Flagged for Review', 'PEP_FLAG', 
+		 'Deal Revenue Tier', 'Partner Concentration Score', 'SOE_Revenue%', 'Total Percent Per Reseller', 
+		 'ECIF Percent of EA Deal', 'ECIF in last 15 days of Quarter', 'ECIF % Of Deal', 'ECIF EOQ Days', 
+		 'All ECIF via Same Partner', 'ECIF Num Of Projects for Same Partner', 'ECIF in Same Month as Sales Score', 
+		 'ECIF in Same Month as Sales', 'ECIF for Same Product as Sales Deal Score', 'ECIF for Same Product as Sales Deal', 
+		 'AssociatedECIFProjects', 'ECIF Count', 'ECIF Points', 'ECIF Risk Score', 'ECIF Flag', 
+		 'CTE Length of Term Score', 'CTE Days', 'CTE Approval Amount Score', 'CTE Amount', 'CTE Amount % per Partner', 
+		 'CTE ReOccurrence Score', 'CTE ReOccurrence', 'CTE Points', 'CTE Flag', 'CTE Risk Score', 
+		 'CTE_AmountperPARTNER', 'Flag_Count_PerPARTNER', 'Flag_Count_PerCUSTOMER', 
+		 'QuoteID', 'RevisionID', 'HRDD QuoteState', 'HRDD QuoteStatus', 'HRDD IsFinalizeRevision', 'HRDD Flagged For Review', 
+		 'HRDD Manually Flagged for Review', 'HRDD ReviewState', 
+		 'IsFrameWorkAvailale', 'FrameWorkID', 'FrameWorkDiscount', 'DiscountIsLessOrEquvaltoFramework', 
+		 'Total SOE Partner Revenue', 'Total SOE Country Revenue', '% SOE Revenue (All)', '% SOE Revenue (Trend)', 
+		 'Total SOE Partner Deals', 'Total SOE Country Deals', '% of SOE Deals (All)', '% of SOE Deals (Trend)', 
+		 'Concentration: % SOE Revenue (All)', 'Concentration: % SOE Revenue (Trend)', 'Concentration: % of SOE Deals (All)', 
+		 'Concentration: % of SOE Deals (Trend)', 'Partner - Total Flagged', 'Area - Total Flagged', '% Flagged Deals', 
+		 'Partner - Total Escalated Deals', 'EOQ', 'IsQuotehashasOnlyOneRevision', 'AvgDaysBetweenRevisions', 'DaysBetweenFirstandLastRevision', 
+		 'Escalated', 'LCC', 'OLC', 'Gaming', 'Devices', 'MCB', 'Developer Tools', 'Inactive', 'MPN', 'Dynamics', 
+		 'Enterprise Services', 'Corp', 'Windows', 'Online Advertising', 'CSS', 'Server and CAL', 'LEX', 'MS Research', 'CSV', 
+		 'N/A', 'Skype', 'OPG', 'Retail Stores', 
+		 'Returned Revenue', 'Revenue', 'Returned Revenue %', 'PartnerOneID', 'PartnerOneName', 
+		 'ATUName', 'ATUManager', 'SalesGroupName', 'SalesUnitName', 'SalesTeamName', 'Deal Fully Compliant?', 
+		 'Type', 'Pull Forward Type', 'Lower of Pull Forward Value or Billed Amount', 'Pull Forward Period', 
+		 'Issue - Quota Adjustment', 'Issue CBT', 'Issue - Additional Approvals', 'Issue - MOPET Approvals', 'Issue - Amendment', 
+		 'Addition of a Pool', 'Change Fulfillment Duration', 'Change Initial Duration', 'Change Microsoft Sales Affiliate', 
+		 'Change of Anniversary Date', 'Change of Channel Partner', 'Change of Level', 'Change of Pricing Terms', 
+		 'Change of Requirement Threshold', 'Change of Terms and Conditions', 'Change Renewal Duration', 'Compliance Re-level',
+		 'Ending a Pool', 'Initial Set up Incorrect', 'Non-Specific', 'Operating Entity Agreement Number', 
+		 'Type_Unknown', 'Applied', 'Reject', 'Review', 'Status_Unknown', 'Standard Amendment', 'Customized Amendment']]
 
 # Pre-processing dataset
-who_is_target = 'MultiClass' # 'Escalated'
 
-df['Target'] = df[who_is_target].copy()
+## Turn First Billed Month as Month only info
+## regex and find are too slow; need to bring a more efficient way to extract substr
+##for i in range(len(df)):
+##	idx = df['First Billed Month'].iloc[i].find(',')
+##	df['First Billed Month'].iloc[i] = df['First Billed Month'].iloc[i][:idx]
+
+# Additional pre-processing steps
+df.fillna(value=0, inplace=True)
+df.replace(('Yes', 'No'), (1, 0), inplace=True)
+df.replace(('YES', 'NO'), (1, 0), inplace=True)
+# df['Renewal vs New'].replace(('Renewal', 'New'), (1, 0), inplace=True)
+
+# Discount features should be 0 to 100 bound
 df.loc[ (df['Discount Amount'] < 0), 'Discount Amount'] = 0
 df.loc[ (df['Discount Percentage'] < 0), 'Discount Percentage'] = 0
 df.loc[ (df['Discount Percentage'] > 100), 'Discount Percentage'] = 100
 df.loc[ (df['Contract Value'] < 0), 'Contract Value'] = 0
 
-df['Partner GOV SOE Conc'].fillna(value=0, inplace=True)
-df['Partner Max Previous 8 qtr Conc'].fillna(value=0, inplace=True)
-df['CTE Length of Term Score'].fillna(value=0, inplace=True)
-df['CTE_AmountperPARTENR'].fillna(value=0, inplace=True)
-df['AssociatedECIFProjects'].fillna(value=0, inplace=True)
-df['SOE Business Contry'].fillna(value=0, inplace=True)
-df['Partner SOE Total Conc'].fillna(value=0, inplace=True)
-df['ECIF in last 15 days of Quarter'].fillna(value=0, inplace=True)
-df['All ECIF via Same Partner'].fillna(value=0, inplace=True)
-df['ECIF Percent of EA Deal'].fillna(value=0, inplace=True)
-df['ECIF in Same Month as Sales'].fillna(value=0, inplace=True)
-df['ECIF for Same Product as Sales Deal'].fillna(value=0, inplace=True)
+# Duplicate features or simply of no use for classification ----------------------------
 
-df['Framework'] = 0
-df.loc[ (df['IsFrameWorkAvailable'] == 'Yes'), 'Framework'] = 1
-df['Framework Discount Risk'] = 0
-df.loc[ (df['DiscountIsLessOrEquvaltoFramework'] == 0) & (df['IsFrameWorkAvailable']== 'Yes'), 
-       'Framework Discount Risk'] = 1
-
-df = df[['Enrollment/Term', 'Target', 'Escalated', 'OLC', 'LCC', 'Flagged', 'SystemFlagged', 'ManuallyFlagged', 
-         'Average Risk Score', 'Geo Risk Score', 'SOE Risk Score', 'Partner Risk Score', 'Large Discount Risk Score', 
-         'Discount Trend Risk Score', 'First Billed Quarter', 'Sub-Segment', 'Sector', 'Cluster', 'Area', 'Sub-Region', 
-         'GeoRiskTier', 'Industry', 'Vertical', 'Government Entity', 'Reseller TPID', 'Partner GOV SOE Conc', 
-         'SOE Business Contry', 'Partner SOE Total Conc','Partner Max Previous 8 qtr Conc', 'Super RSD','Contract Value', 
-         'Discount Amount', 'Discount Percentage' , 'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 
-         'CTE Length of Term Score', 'CTE_AmountperPARTENR', 'AssociatedECIFProjects', 'ECIF in last 15 days of Quarter', 
-         'All ECIF via Same Partner', 'ECIF Percent of EA Deal', 'ECIF in Same Month as Sales', 
-         'ECIF for Same Product as Sales Deal', 'Framework', 'Framework Discount Risk', 'Total SOE Partner Revenue', 
-         'Total SOE Country Revenue', '% SOE Revenue (All)', '% SOE Revenue (Trend)', 'Total SOE Partner Deals', 
-         'Total SOE Country Deals', '% of SOE Deals (All)', '% of SOE Deals (Trend)', 'Concentration: % SOE Revenue (All)',
-         'Concentration: % SOE Revenue (Trend)', 'Concentration: % of SOE Deals (All)', 'Concentration: % of SOE Deals (Trend)', 
-         'Partner - Total Flagged', 'Area - Total Flagged', '% Flagged Deals', 'Partner - Total Escalated Deals', 
-         'EOQ', 'IsQuotehashasOnlyOneRevision', 'AvgDaysBetweenRevisions', 'DaysBetweenFirstandLastRevision', 'Gaming', 
-         'Devices', 'MCB', 'Developer Tools', 'Inactive', 'MPN', 'Dynamics', 'Enterprise Services', 'Corp', 'Windows', 
-         'Online Advertising', 'CSS', 'Server and CAL', 'LEX', 'MS Research', 'CSV', 'Skype', 'MOD', 'Retail Stores', 
-         'Returned Revenue', 'Revenue', 'Returned Revenue %', 'PartnerOneID', 'PartnerOneName', 'ATUName', 'ATUManager', 
-         'SalesGroupName', 'SalesUnitName', 'SalesTeamName', 'First Billed Month']]
-
-# Removing non-features e.g. RiskScores, Flagged, OLC, LCC
-
-df.drop(['OLC'], axis=1, inplace=True)
-df.drop(['LCC'], axis=1, inplace=True)
-df.drop(['Flagged'], axis=1, inplace=True)
+df.drop(['First Billed Date'], axis=1, inplace=True)
+df.drop(['First Billed Month'], axis=1, inplace=True)
+df.drop(['First Billed Quarter'], axis=1, inplace=True)
+# df.drop(['Flagged'], axis=1, inplace=True) -----	OBS.: we'll drop this feature later
 df.drop(['SystemFlagged'], axis=1, inplace=True)
 df.drop(['ManuallyFlagged'], axis=1, inplace=True)
+df.drop(['Sub-Segment'], axis=1, inplace=True)
+df.drop(['Cluster'], axis=1, inplace=True)
+df.drop(['Area'], axis=1, inplace=True)
+df.drop(['Region'], axis=1, inplace=True)
+df.drop(['Sub-Region'], axis=1, inplace=True)
+df.drop(['Customer TPID'], axis=1, inplace=True)	# OBS.: Ethical AI
+df.drop(['Reseller TPID'], axis=1, inplace=True)	# OBS.: Ethical AI
+df.drop(['Account Manager'], axis=1, inplace=True)	# OBS.: Ethical AI replace name with tenure and level HR db
+df.drop(['Vertical'], axis=1, inplace=True)
+df.drop(['Super RSD'], axis=1, inplace=True)
 df.drop(['Average Risk Score'], axis=1, inplace=True)
 df.drop(['Geo Risk Score'], axis=1, inplace=True)
 df.drop(['SOE Risk Score'], axis=1, inplace=True)
 df.drop(['Partner Risk Score'], axis=1, inplace=True)
 df.drop(['Large Discount Risk Score'], axis=1, inplace=True)
 df.drop(['Discount Trend Risk Score'], axis=1, inplace=True)
+df.drop(['Flagged In HRDD'], axis=1, inplace=True)
+df.drop(['Manually Flagged for Review'], axis=1, inplace=True)
 df.drop(['CTE Length of Term Score'], axis=1, inplace=True)
-df.drop(['Escalated'], axis=1, inplace=True)
-df.drop(['Total SOE Partner Revenue', 'Total SOE Country Revenue', '% SOE Revenue (Trend)', 'Total SOE Partner Deals', 'Total SOE Country Deals', '% of SOE Deals (Trend)', 'Concentration: % SOE Revenue (All)', 'Concentration: % SOE Revenue (Trend)', 'Concentration: % of SOE Deals (All)', 'Concentration: % of SOE Deals (Trend)', 'Partner - Total Flagged', 'Area - Total Flagged', '% Flagged Deals', 'Partner - Total Escalated Deals'], axis=1, inplace=True)
-
-df.drop(['ATUManager'], axis=1, inplace=True)
+df.drop(['ECIF Count'], axis=1, inplace=True)
+df.drop(['ECIF Points'], axis=1, inplace=True)
+df.drop(['ECIF Risk Score'], axis=1, inplace=True)
+df.drop(['ECIF Flag'], axis=1, inplace=True)
+df.drop(['CTE Amount'], axis=1, inplace=True)
+df.drop(['CTE Points'], axis=1, inplace=True)
+df.drop(['CTE Risk Score'], axis=1, inplace=True)
+df.drop(['CTE Flag'], axis=1, inplace=True)
+df.drop(['CTE Days', 'CTE Approval Amount Score', 'CTE Amount % per Partner'], axis=1, inplace=True) 
+df.drop(['CTE ReOccurrence Score', 'CTE ReOccurrence'], axis=1, inplace=True)
+df.drop(['CTE_AmountperPARTNER', 'Flag_Count_PerPARTNER', 'Flag_Count_PerCUSTOMER'], axis=1, inplace=True) 
+df.drop(['QuoteID', 'RevisionID', 'HRDD QuoteState', 'HRDD QuoteStatus', 'HRDD IsFinalizeRevision', 'HRDD Flagged For Review'], axis=1, inplace=True) 
+df.drop(['HRDD Manually Flagged for Review', 'HRDD ReviewState'], axis=1, inplace=True)
+df.drop(['DiscountIsLessOrEquvaltoFramework'], axis=1, inplace=True)
+df.drop(['Total SOE Partner Revenue'], axis=1, inplace=True)
+df.drop(['Total SOE Country Revenue'], axis=1, inplace=True)
+df.drop(['% SOE Revenue (Trend)'], axis=1, inplace=True)
+df.drop(['Total SOE Partner Deals'], axis=1, inplace=True)
+df.drop(['Total SOE Country Deals'], axis=1, inplace=True)
+df.drop(['% of SOE Deals (Trend)'], axis=1, inplace=True) 
+df.drop(['Concentration: % SOE Revenue (All)'], axis=1, inplace=True) 
+df.drop(['Concentration: % SOE Revenue (Trend)'], axis=1, inplace=True) 
+df.drop(['Concentration: % of SOE Deals (All)'], axis=1, inplace=True)
+df.drop(['Concentration: % of SOE Deals (Trend)'], axis=1, inplace=True)
+df.drop(['Partner - Total Flagged', 'Area - Total Flagged'], axis=1, inplace=True)
+df.drop(['% Flagged Deals'], axis=1, inplace=True)
+df.drop(['Partner - Total Escalated Deals'], axis=1, inplace=True)
+df.drop(['EOQ'], axis=1, inplace=True)
 df.drop(['PartnerOneName'], axis=1, inplace=True)
 df.drop(['Revenue'], axis=1, inplace=True)
-
-print('Target as %s %s:' % (who_is_target, Counter(df['Target'])))
+df.drop(['Gaming', 'Devices', 'MCB', 'Developer Tools', 'Inactive', 'MPN'], axis=1, inplace=True)  
+df.drop(['Enterprise Services', 'Corp', 'Windows', 'Online Advertising', 'CSS', 'MS Research', 'CSV'], axis=1, inplace=True) 
+df.drop(['N/A', 'Skype', 'OPG', 'Retail Stores'], axis=1, inplace=True)
+df.drop(['PartnerOneID'], axis=1, inplace=True)
+df.drop(['ATUManager'], axis=1, inplace=True)
+df.drop(['SalesUnitName', 'SalesTeamName'], axis=1, inplace=True)
+df.drop(['OLC'], axis=1, inplace=True)
+df.drop(['LCC'], axis=1, inplace=True)
 
 # More pre-processing, turning categorical features into dummy variables
 print('df shape before creating dummies: ', df.shape)
 
-# Discount percentages should be 100 bound
-df.loc[ (df['Discount Percentage'] > 100), 'Discount Percentage' ] = 100
-
-df = pd.get_dummies(df, columns = ['Sub-Segment', 'Sector', 'Cluster', 'Area', 'Sub-Region', 
-      'GeoRiskTier', 'Industry', 'Vertical', 'Government Entity', 'Reseller TPID',  
-      'Super RSD', 'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 'PartnerOneID',
-      'ATUName', 'SalesGroupName', 'SalesUnitName', 'SalesTeamName', 'First Billed Quarter',
-      'First Billed Month'])
+df = pd.get_dummies(df, columns = ['Quarter', 'Subsidiary', 'Sector', 'GeoRiskTier', 'Industry', 
+								   'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 
+								   'ATUName', 'SalesGroupName', 'Type', 'Pull Forward Type', 'Pull Forward Period',
+								   'Platform vs Component', 'SOE Flag',
+								   'Government Entity', 'Product'])
 
 print('df shape after dummies: ', df.shape)
+colnames = df.columns.values
+
+# Defining Target
+who_is_target = 'MultiClass' # 'Escalated'
+df[who_is_target] = 'Empty'
+
+df.loc[ (df['Escalated'] == 1), 'MultiClass'] = 'High'
+df.loc[ (df['Flagged'] == 1) & (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Flag'
+df.loc[ (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Low'
+
+df['Target'] = df[who_is_target].copy()
+
+print('Target as %s %s:' % (who_is_target, Counter(df['Target'])))
+
+# We can now drop Escalated and Flagged features from data frame
+df.drop(['Escalated'], axis=1, inplace=True)
+df.drop(['Flagged'], axis=1, inplace=True)
 
 ############################################################################################
 # STEP 2
@@ -619,7 +692,7 @@ print('df shape after dummies: ', df.shape)
 # SMOTEENN
 # Setting options for cross validation and scoring metric e.g. accuracy, recall
 ############################################################################################
-train_cols = df.columns[2:] # skip Enrollment/Term, Target, Escalated, First Billed Quarter
+train_cols = df.columns[1:-2] # skip Enrollment/Term, First Billed Date, and Target
 
 X = df[train_cols]
 Y = df['Target']
@@ -834,7 +907,9 @@ print('Stop 2 of 5')
 #
 observation_index = 425
 
-class_result = model.predict(df[selected_features].iloc[observation_index:observation_index+1])
+rescaledValidationX_one = scaler.transform(X_train_resampled.iloc[observation_index:observation_index+1])
+rescaledValidationX_one = selector.transform(rescaledValidationX_one)
+class_result = model.predict(rescaledValidationX_one)
 
 if class_result[0] == 'Flag':
     class_index = 0
@@ -844,8 +919,8 @@ else:
     class_index = 2
 
 dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledValidationX)
-plot_obs_feature_contrib(model, dt_multi_contrib, df[selected_features], pd.Series(df['Target']), 
-                         index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True)
+plot_obs_feature_contrib(model, dt_multi_contrib, X_train_resampled.columns[mask], Y_train_resampled,
+						 index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True)
 
 #plt.show()
 print('Stop 3 of 5')
