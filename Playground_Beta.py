@@ -609,20 +609,26 @@ df.drop(['Reseller TPID'], axis=1, inplace=True)	# OBS.: Ethical AI
 df.drop(['Account Manager'], axis=1, inplace=True)	# OBS.: Ethical AI replace name with tenure and level HR db
 df.drop(['Vertical'], axis=1, inplace=True)
 df.drop(['Super RSD'], axis=1, inplace=True)
+df.drop(['Contract Value'], axis=1, inplace=True)
+df.drop(['Discount Amount'], axis=1, inplace=True)
+df.drop(['Discount Percentage'], axis=1, inplace=True)
 df.drop(['Average Risk Score'], axis=1, inplace=True)
 df.drop(['Geo Risk Score'], axis=1, inplace=True)
 df.drop(['SOE Risk Score'], axis=1, inplace=True)
 df.drop(['Partner Risk Score'], axis=1, inplace=True)
 df.drop(['Large Discount Risk Score'], axis=1, inplace=True)
 df.drop(['Discount Trend Risk Score'], axis=1, inplace=True)
-df.drop(['Flagged In HRDD'], axis=1, inplace=True)
-df.drop(['Manually Flagged for Review'], axis=1, inplace=True)
+df.drop(['Partner Concentration Score'], axis=1, inplace=True)
+df.drop(['ECIF Percent of EA Deal'], axis=1, inplace=True)
+df.drop(['ECIF in Same Month as Sales Score'], axis=1, inplace=True)
+df.drop(['ECIF for Same Product as Sales Deal Score'], axis=1, inplace=True)
+
 df.drop(['CTE Length of Term Score'], axis=1, inplace=True)
+
 df.drop(['ECIF Count'], axis=1, inplace=True)
 df.drop(['ECIF Points'], axis=1, inplace=True)
 df.drop(['ECIF Risk Score'], axis=1, inplace=True)
 df.drop(['ECIF Flag'], axis=1, inplace=True)
-df.drop(['CTE Amount'], axis=1, inplace=True)
 df.drop(['CTE Points'], axis=1, inplace=True)
 df.drop(['CTE Risk Score'], axis=1, inplace=True)
 df.drop(['CTE Flag'], axis=1, inplace=True)
@@ -630,8 +636,7 @@ df.drop(['CTE Days', 'CTE Approval Amount Score', 'CTE Amount % per Partner'], a
 df.drop(['CTE ReOccurrence Score', 'CTE ReOccurrence'], axis=1, inplace=True)
 df.drop(['CTE_AmountperPARTNER', 'Flag_Count_PerPARTNER', 'Flag_Count_PerCUSTOMER'], axis=1, inplace=True) 
 df.drop(['QuoteID', 'RevisionID', 'HRDD QuoteState', 'HRDD QuoteStatus', 'HRDD IsFinalizeRevision', 'HRDD Flagged For Review'], axis=1, inplace=True) 
-df.drop(['HRDD Manually Flagged for Review', 'HRDD ReviewState'], axis=1, inplace=True)
-df.drop(['DiscountIsLessOrEquvaltoFramework'], axis=1, inplace=True)
+df.drop(['HRDD ReviewState'], axis=1, inplace=True)
 df.drop(['Total SOE Partner Revenue'], axis=1, inplace=True)
 df.drop(['Total SOE Country Revenue'], axis=1, inplace=True)
 df.drop(['% SOE Revenue (Trend)'], axis=1, inplace=True)
@@ -642,32 +647,22 @@ df.drop(['Concentration: % SOE Revenue (All)'], axis=1, inplace=True)
 df.drop(['Concentration: % SOE Revenue (Trend)'], axis=1, inplace=True) 
 df.drop(['Concentration: % of SOE Deals (All)'], axis=1, inplace=True)
 df.drop(['Concentration: % of SOE Deals (Trend)'], axis=1, inplace=True)
-df.drop(['Partner - Total Flagged', 'Area - Total Flagged'], axis=1, inplace=True)
-df.drop(['% Flagged Deals'], axis=1, inplace=True)
-df.drop(['Partner - Total Escalated Deals'], axis=1, inplace=True)
-df.drop(['EOQ'], axis=1, inplace=True)
-df.drop(['PartnerOneName'], axis=1, inplace=True)
 df.drop(['Revenue'], axis=1, inplace=True)
 df.drop(['Gaming', 'Devices', 'MCB', 'Developer Tools', 'Inactive', 'MPN'], axis=1, inplace=True)  
 df.drop(['Enterprise Services', 'Corp', 'Windows', 'Online Advertising', 'CSS', 'MS Research', 'CSV'], axis=1, inplace=True) 
 df.drop(['N/A', 'Skype', 'OPG', 'Retail Stores'], axis=1, inplace=True)
-df.drop(['PartnerOneID'], axis=1, inplace=True)
+df.drop(['PartnerOneName'], axis=1, inplace=True)
 df.drop(['ATUManager'], axis=1, inplace=True)
-df.drop(['SalesUnitName', 'SalesTeamName'], axis=1, inplace=True)
+df.drop(['SalesGroupName', 'SalesUnitName', 'SalesTeamName'], axis=1, inplace=True)
 df.drop(['OLC'], axis=1, inplace=True)
 df.drop(['LCC'], axis=1, inplace=True)
 
-# More pre-processing, turning categorical features into dummy variables
-print('df shape before creating dummies: ', df.shape)
-
-df = pd.get_dummies(df, columns = ['Quarter', 'Subsidiary', 'Sector', 'GeoRiskTier', 'Industry', 
-								   'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 
-								   'ATUName', 'SalesGroupName', 'Type', 'Pull Forward Type', 'Pull Forward Period',
-								   'Platform vs Component', 'SOE Flag',
-								   'Government Entity', 'Product'])
-
-print('df shape after dummies: ', df.shape)
-colnames = df.columns.values
+# Framework feature engineering 
+df['Framework'] = 0
+df.loc[ (df['IsFrameWorkAvailale'] == 1), 'Framework'] = 1
+df['Framework Discount Risk'] = 0
+df.loc[ (df['DiscountIsLessOrEquvaltoFramework'] == 0) & (df['IsFrameWorkAvailale']== 1), 
+       'Framework Discount Risk'] = 1
 
 # Defining Target
 who_is_target = 'MultiClass' # 'Escalated'
@@ -676,14 +671,37 @@ df[who_is_target] = 'Empty'
 df.loc[ (df['Escalated'] == 1), 'MultiClass'] = 'High'
 df.loc[ (df['Flagged'] == 1) & (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Flag'
 df.loc[ (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Low'
-
-df['Target'] = df[who_is_target].copy()
-
-print('Target as %s %s:' % (who_is_target, Counter(df['Target'])))
+df.loc[ (df['Flagged In HRDD'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Flag'
+df.loc[ (df['HRDD Manually Flagged for Review'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Flag'
 
 # We can now drop Escalated and Flagged features from data frame
 df.drop(['Escalated'], axis=1, inplace=True)
 df.drop(['Flagged'], axis=1, inplace=True)
+df.drop(['IsFrameWorkAvailale'], axis=1, inplace=True)
+df.drop(['FrameWorkID'], axis=1, inplace=True)
+df.drop(['FrameWorkDiscount'], axis=1, inplace=True)
+df.drop(['DiscountIsLessOrEquvaltoFramework'], axis=1, inplace=True)
+df.drop(['Flagged In HRDD'], axis=1, inplace=True)
+df.drop(['Manually Flagged for Review'], axis=1, inplace=True)
+
+# More pre-processing, turning categorical features into dummy variables
+print('df shape before creating dummies: ', df.shape)
+
+#for x in df:
+#	if 'Low' in df[x].values:
+#		print(x)
+
+df = pd.get_dummies(df, columns = ['Quarter', 'Subsidiary', 'Sector', 'GeoRiskTier', 'Industry', 'Product', 
+								   'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 
+								   'ATUName', 'Type', 'Pull Forward Type', 'Pull Forward Period',
+								   'Platform vs Component', 'SOE Flag',
+								   'Government Entity', 'Product'])
+
+print('df shape after dummies: ', df.shape)
+colnames = df.columns.values
+
+df['Target'] = df[who_is_target].copy()
+print('Target as %s %s:' % (who_is_target, Counter(df['Target'])))
 
 ############################################################################################
 # STEP 2
@@ -692,7 +710,8 @@ df.drop(['Flagged'], axis=1, inplace=True)
 # SMOTEENN
 # Setting options for cross validation and scoring metric e.g. accuracy, recall
 ############################################################################################
-train_cols = df.columns[1:-2] # skip Enrollment/Term, First Billed Date, and Target
+#train_cols = df.columns[1:-1, df.columns != 'MultiClass'] # skip Enrollment/Term, First Billed Date, and Target
+train_cols = df.loc[:, df.columns != 'MultiClass'].columns[1:-1]
 
 X = df[train_cols]
 Y = df['Target']
@@ -907,7 +926,8 @@ print('Stop 2 of 5')
 # Integer representing which observation we would like to examine feature contributions
 # for classification
 #
-observation_index = 1 #500 #1397 #425
+observation_index = df.loc[ df['Enrollment/Term']  == '67140707-1' ].index.values.astype(int)[0]
+#observation_index = 1669 #1397 #425
 
 rescaledValidationX_one = scaler.transform(df[train_cols].iloc[observation_index:observation_index+1])
 rescaledValidationX_one = selector.transform(rescaledValidationX_one)
@@ -920,7 +940,12 @@ elif class_result[0] == 'High':
 else:
     class_index = 2
 
-dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledValidationX)
+scaler = MinMaxScaler(feature_range=(0, 1)).fit(X)
+rescaledX_Total = scaler.transform(X)
+selector = SelectKBest(f_classif, k=n_features).fit(rescaledX_Total, Y)
+rescaledX_Total = selector.transform(rescaledX_Total)
+
+dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledX_Total)
 plot_obs_feature_contrib(model, dt_multi_contrib, df[selected_features], pd.Series(df['Target']), 
 						 index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True)
 
@@ -945,7 +970,7 @@ class_names = ['Risk = {}'.format(s) for s in ('Flag', 'High', 'Low')]
 
 # Name of feature for examining all its values in relatio to its importances
 # for classifications
-feat_name_ = 'Discount Amount'
+feat_name_ = 'Enrollment Contract Value'
 
 #for i in range(len(colours)):
 #    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
