@@ -919,7 +919,7 @@ else:
     class_index = 2
 
 dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledValidationX)
-plot_obs_feature_contrib(model, dt_multi_contrib, X_train_resampled.columns[mask], Y_train_resampled,
+plot_obs_feature_contrib(model, dt_multi_contrib, df[selected_features], pd.Series(df['Target']), 
 						 index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True)
 
 #plt.show()
