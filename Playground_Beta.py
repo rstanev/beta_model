@@ -945,7 +945,7 @@ class_names = ['Risk = {}'.format(s) for s in ('Flag', 'High', 'Low')]
 
 # Name of feature for examining all its values in relatio to its importances
 # for classifications
-feat_name_ = 'Enrollment Discount Amount'
+feat_name_ = 'Discount Amount'
 
 #for i in range(len(colours)):
 #    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
