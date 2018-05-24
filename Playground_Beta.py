@@ -1,5 +1,6 @@
 ############################################################################################################
 # High Risk Deals - beta model
+# Checked-in: 05/24/2018 -- 2pm
 # GOAL:
 # Build ML model to classify and assign probability of high risk, flag, low risk, for each deal, 
 # -- ultimately scoring 'unseen' deals and providing interpretability of results.
@@ -117,7 +118,7 @@ blue, green, red, purple, yellow, cyan = sns.color_palette('colorblind')
 
 def plot_obs_feature_contrib(clf, contributions, features_df, labels, index, 
                              class_index=0, num_features=None,
-                             order_by='natural', violin=False, **kwargs):
+                             order_by='natural', violin=False, class_scores=None, **kwargs):
 
     """Plots a single observation's feature contributions.
     Inputs:
@@ -134,6 +135,7 @@ def plot_obs_feature_contrib(clf, contributions, features_df, labels, index,
                is the natural one, which takes the original feature
                ordering. (Options: 'natural', 'contribution')
     violin - Whether to plot violin plots (Default: False)
+	scores - Probability values from predict_proba
     Returns:
     obs_contrib_df - A Pandas DataFrame that includes the feature values
                      and their contributions
@@ -273,20 +275,20 @@ def plot_obs_feature_contrib(clf, contributions, features_df, labels, index,
         if isinstance(clf, DecisionTreeClassifier)\
                 or isinstance(clf, RandomForestClassifier):
 
-            scores = clf.predict_proba(features_df.iloc[index:index+1])[0]
+            if class_scores is None: scores = clf.predict_proba(features_df.iloc[index:index+1])[0]
 
-            scores = [float('{:1.3f}'.format(i)) for i in scores]
+            scores = [float('{:1.3f}'.format(i)) for i in class_scores[0]]
 
             # v-rostan: fixing a bug -- making sure it displays all probability scores accordingly
             # including classified class and complement classes
             # based on scores from predict_proba scikit-learn 
             # ---
             if has_ax:
-                ax.set_title('True Value: {}\nScores: Flag ({}), High ({}), Low ({})'
+                ax.set_title('True Value: {}\nScores: High ({}), Med ({}), Low ({})'
                                  .format(true_label, scores[0], scores[1], scores[2])) # scores[class_index]
             else:
 
-                plt.title('True Value: {}\nScores: Flag ({}), High ({}), Low ({})'
+                plt.title('True Value: {}\nScores: High ({}), Med ({}), Low ({})'
 
                               .format(true_label, scores[0], scores[1], scores[2])) # scores[class_index]
 
@@ -590,6 +592,11 @@ df.loc[ (df['Discount Amount'] < 0), 'Discount Amount'] = 0
 df.loc[ (df['Discount Percentage'] < 0), 'Discount Percentage'] = 0
 df.loc[ (df['Discount Percentage'] > 100), 'Discount Percentage'] = 100
 df.loc[ (df['Contract Value'] < 0), 'Contract Value'] = 0
+df.loc[ (df['Enrollment Discount Amount'] < 0), 'Enrollment Discount Amount'] = 0
+df.loc[ (df['Enrollment Discount Percentage'] < 0), 'Enrollment Discount Percentage'] = 0
+df.loc[ (df['Enrollment Discount Percentage'] > 100), 'Enrollment Discount Percentage'] = 100
+df.loc[ (df['Enrollment Contract Value'] < 0), 'Enrollment Contract Value'] = 0
+
 
 # Duplicate features or simply of no use for classification ----------------------------
 
@@ -669,10 +676,10 @@ who_is_target = 'MultiClass' # 'Escalated'
 df[who_is_target] = 'Empty'
 
 df.loc[ (df['Escalated'] == 1), 'MultiClass'] = 'High'
-df.loc[ (df['Flagged'] == 1) & (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Flag'
+df.loc[ (df['Flagged'] == 1) & (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Med'
 df.loc[ (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Low'
-df.loc[ (df['Flagged In HRDD'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Flag'
-df.loc[ (df['HRDD Manually Flagged for Review'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Flag'
+df.loc[ (df['Flagged In HRDD'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Med'
+df.loc[ (df['HRDD Manually Flagged for Review'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Med'
 
 # We can now drop Escalated and Flagged features from data frame
 df.drop(['Escalated'], axis=1, inplace=True)
@@ -695,7 +702,7 @@ df = pd.get_dummies(df, columns = ['Quarter', 'Subsidiary', 'Sector', 'GeoRiskTi
 								   'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 
 								   'ATUName', 'Type', 'Pull Forward Type', 'Pull Forward Period',
 								   'Platform vs Component', 'SOE Flag',
-								   'Government Entity', 'Product'])
+								   'Government Entity'])
 
 print('df shape after dummies: ', df.shape)
 colnames = df.columns.values
@@ -763,13 +770,13 @@ selected_features = df[train_cols].columns[mask]
 # Hyper-parameter tuning for grid search
 
 #param_grid = {'n_estimators': [100], 'class_weight': ['balanced']}
-#param_grid = {'class_weight':[{'Flag': 10, 'High': 100, 'Low': 1}, 
-#                              {'Flag': 6.7, 'High': 95.9, 'Low': 0.35}, 
+#param_grid = {'class_weight':[{'Med': 10, 'High': 100, 'Low': 1}, 
+#                              {'Med': 6.7, 'High': 95.9, 'Low': 0.35}, 
 #                              'balanced', None], 
 #                              'min_samples_leaf':[10]}
 param_grid = {'class_weight':['balanced'], 'min_samples_leaf':[10]}
 
-# {'Flag': 20, 'High': 100, 'Low': 1}, {'Flag': 5, 'High': 200, 'Low': 1}, {'Flag': 20, 'High': 100, 'Low': 0.5}, 
+# {'Med': 20, 'High': 100, 'Low': 1}, {'Med': 5, 'High': 200, 'Low': 1}, {'Med': 20, 'High': 100, 'Low': 0.5}, 
                               
 
 model = DecisionTreeClassifier()
@@ -802,9 +809,9 @@ rescaledValidationX = scaler.transform(X_test)
 rescaledValidationX = selector.transform(rescaledValidationX)
 predictions = model.predict(rescaledValidationX)
 print('Accuracy score: ' + str(accuracy_score(Y_test, predictions)))
-cm = confusion_matrix(Y_test, predictions)
+cm = confusion_matrix(Y_test, predictions, labels=['High', 'Med', 'Low'])
 print(cm)
-print(classification_report(Y_test, predictions))
+print(classification_report(Y_test, predictions, labels=['High', 'Med', 'Low']))
 print('Recall score (micro): ' + str(recall_score(Y_test, predictions, average='micro')))
 print('Recall score (macro): ' + str(recall_score(Y_test, predictions, average='macro')))
 print('Recall score (weighted): ' + str(recall_score(Y_test, predictions, average='weighted')))
@@ -828,7 +835,7 @@ v_df.to_csv("C:\\Users\\v-rostan\\beta_testset.csv")
 list_ = []
 c = 0
 for i in range(len(Y_test)):
-    if Y_test.iloc[i] == 'Flag':
+    if Y_test.iloc[i] == 'Med':
         if Y_test.iloc[i] == predictions[i]:
             c = c+1
             list_.append(Y_test.index[i])
@@ -843,7 +850,7 @@ np.set_printoptions(precision=2)
 
 # Plot normalized confusion matrix
 plt.figure()
-plot_confusion_matrix(cm, classes=['Flag', 'High', 'Low'], normalize=True,
+plot_confusion_matrix(cm, classes=['High', 'Med', 'Low'], normalize=True,
                       title='HRD normalized confusion matrix')
 plt.show()
         
@@ -880,7 +887,7 @@ Y_GAM = df['Target'].copy()
 
 Y_GAM.replace(to_replace='Low', value=0, inplace=True)
 Y_GAM.replace(to_replace='High', value=1, inplace=True)
-Y_GAM.replace(to_replace='Flag', value=1, inplace=True)
+Y_GAM.replace(to_replace='Med', value=1, inplace=True)
 
 gam = LogisticGAM().fit(df_GAM, Y_GAM)
 
@@ -932,10 +939,11 @@ observation_index = df.loc[ df['Enrollment/Term']  == '67140707-1' ].index.value
 rescaledValidationX_one = scaler.transform(df[train_cols].iloc[observation_index:observation_index+1])
 rescaledValidationX_one = selector.transform(rescaledValidationX_one)
 class_result = model.predict(rescaledValidationX_one)
+class_scores = model.predict_proba(rescaledValidationX_one)
 
-if class_result[0] == 'Flag':
+if class_result[0] == 'High':
     class_index = 0
-elif class_result[0] == 'High':
+elif class_result[0] == 'Med':
     class_index = 1
 else:
     class_index = 2
@@ -945,9 +953,9 @@ rescaledX_Total = scaler.transform(X)
 selector = SelectKBest(f_classif, k=n_features).fit(rescaledX_Total, Y)
 rescaledX_Total = selector.transform(rescaledX_Total)
 
-dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledX_Total)
-plot_obs_feature_contrib(model, dt_multi_contrib, df[selected_features], pd.Series(df['Target']), 
-						 index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True)
+dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledX_Total) #pd.Series(Y['Target']
+plot_obs_feature_contrib(model, dt_multi_contrib, X[selected_features], Y, 
+						 index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True, class_scores=class_scores)
 
 #plt.show()
 print('Stop 3 of 5')
@@ -964,13 +972,13 @@ plt.show()
 print('Stop 4 of 5')
 
 colours = [blue, red, green]
-class_names = ['Risk = {}'.format(s) for s in ('Flag', 'High', 'Low')]
+class_names = ['Risk = {}'.format(s) for s in ('Med', 'High', 'Low')]
 #fig, ax = plt.subplots(1, 3, sharey=True)
 #fig.set_figwidth(20)
 
 # Name of feature for examining all its values in relatio to its importances
 # for classifications
-feat_name_ = 'Enrollment Contract Value'
+feat_name_ = 'Enrollment Discount Percentage'
 
 #for i in range(len(colours)):
 #    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
@@ -984,7 +992,7 @@ fig, ax = plt.subplots(1, 3, sharey=True)
 fig.set_figwidth(20)
 
 for i in range(len(colours)):
-    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
+    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X[selected_features],
                              class_index=i, class_name=class_names[i],
                              add_smooth=True, c=colours[i], ax=ax[i])
     
