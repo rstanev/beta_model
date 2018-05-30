@@ -526,7 +526,7 @@ loss = make_scorer(hrd_custom_loss_func, greagter_is_better = False)
 # data frozen on 05/18/2018 and available at G:\Datascience\Fact_HRDEA_DS_05182018.csv  
 # 
 ############################################################################################
-source_file = "G:\\Datascience\\Fact_HRDEA_DS_05182018.csv"
+source_file = "C:\\Users\\v-rostan\\ds\\Fact_HRDEA_DS_05182018.csv"
 data = read_csv(source_file, encoding = "ISO-8859-1")
 
 # Load source data as pandas data frame
@@ -757,7 +757,7 @@ print(sorted(Counter(Y_train_resampled).items()))
 # Algorithm tuning for best scaled ML candidate
 # Best candidate so far: ScaledRFC -- now searching for best configuration
 #####################################################################################################
-n_features = 1000
+n_features = 100
 
 # Tune scaled top model performer
 scaler = MinMaxScaler(feature_range=(0, 1)).fit(X_train_resampled)
@@ -769,7 +769,7 @@ selected_features = df[train_cols].columns[mask]
 
 # Hyper-parameter tuning for grid search
 
-#param_grid = {'n_estimators': [100], 'class_weight': ['balanced']}
+#param_grid = {'n_estimators': [100], 'class_weight': [{'Med': 10, 'High': 100, 'Low': 1}]}
 #param_grid = {'class_weight':[{'Med': 10, 'High': 100, 'Low': 1}, 
 #                              {'Med': 6.7, 'High': 95.9, 'Low': 0.35}, 
 #                              'balanced', None], 
@@ -780,7 +780,7 @@ param_grid = {'class_weight':['balanced'], 'min_samples_leaf':[10]}
                               
 
 model = DecisionTreeClassifier()
-#model_ = RandomForestClassifier()
+#model = RandomForestClassifier()
 
 kfold = KFold(n_splits=num_folds, random_state=seed)
 grid = GridSearchCV(estimator=model, param_grid=param_grid, scoring=scoring, cv=kfold)
@@ -793,7 +793,7 @@ params = grid_result.cv_results_['params']
 for mean, stdev, param in zip(means, stds, params):
     print("%f (%f) with: %r" % (mean, stdev, param))
 
-#model_ = RandomForestClassifier(n_estimators=10, class_weight='balanced') #(**grid_result.best_params_)
+#model = RandomForestClassifier(**grid_result.best_params_) #(n_estimators=100, class_weight='balanced') #(**grid_result.best_params_)
 model = DecisionTreeClassifier(**grid_result.best_params_) #(class_weight='balanced', min_samples_leaf=10)
 model.fit(rescaledX, Y_train_resampled)
 #model_.fit(rescaledX, Y_train_resampled)
@@ -955,7 +955,7 @@ rescaledX_Total = selector.transform(rescaledX_Total)
 
 dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledX_Total) #pd.Series(Y['Target']
 plot_obs_feature_contrib(model, dt_multi_contrib, X[selected_features], Y, 
-						 index=observation_index, class_index=class_index, num_features=20, order_by='contribution', violin=True, class_scores=class_scores)
+						 index=observation_index, class_index=class_index, num_features=15, order_by='contribution', violin=True, class_scores=class_scores)
 
 #plt.show()
 print('Stop 3 of 5')
@@ -971,14 +971,14 @@ print('Stop 3 of 5')
 plt.show()
 print('Stop 4 of 5')
 
-colours = [blue, red, green]
-class_names = ['Risk = {}'.format(s) for s in ('Med', 'High', 'Low')]
+colours = [red, green, blue]
+class_names = ['Risk = {}'.format(s) for s in ('High', 'Low', 'Med')]
 #fig, ax = plt.subplots(1, 3, sharey=True)
 #fig.set_figwidth(20)
 
 # Name of feature for examining all its values in relatio to its importances
 # for classifications
-feat_name_ = 'Enrollment Discount Percentage'
+feat_name_ = 'Partner - Total Escalated Deals'
 
 #for i in range(len(colours)):
 #    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
@@ -991,8 +991,10 @@ feat_name_ = 'Enrollment Discount Percentage'
 fig, ax = plt.subplots(1, 3, sharey=True)
 fig.set_figwidth(20)
 
+dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledValidationX)
+
 for i in range(len(colours)):
-    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X[selected_features],
+    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
                              class_index=i, class_name=class_names[i],
                              add_smooth=True, c=colours[i], ax=ax[i])
     
