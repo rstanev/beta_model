@@ -1,6 +1,6 @@
 ############################################################################################################
 # High Risk Deals - beta model
-# Checked-in: 05/24/2018 -- 2pm
+# Checked-in: 05/31/2018 -- 6:30 am (UTC-7)
 # GOAL:
 # Build ML model to classify and assign probability of high risk, flag, low risk, for each deal, 
 # -- ultimately scoring 'unseen' deals and providing interpretability of results.
@@ -118,7 +118,7 @@ blue, green, red, purple, yellow, cyan = sns.color_palette('colorblind')
 
 def plot_obs_feature_contrib(clf, contributions, features_df, labels, index, 
                              class_index=0, num_features=None,
-                             order_by='natural', violin=False, class_scores=None, **kwargs):
+                             order_by='natural', violin=False, class_scores=None, e_id='', **kwargs):
 
     """Plots a single observation's feature contributions.
     Inputs:
@@ -136,6 +136,7 @@ def plot_obs_feature_contrib(clf, contributions, features_df, labels, index,
                ordering. (Options: 'natural', 'contribution')
     violin - Whether to plot violin plots (Default: False)
 	scores - Probability values from predict_proba
+    e_id - Enrollment ID
     Returns:
     obs_contrib_df - A Pandas DataFrame that includes the feature values
                      and their contributions
@@ -284,13 +285,13 @@ def plot_obs_feature_contrib(clf, contributions, features_df, labels, index,
             # based on scores from predict_proba scikit-learn 
             # ---
             if has_ax:
-                ax.set_title('True Value: {}\nScores: High ({}), Med ({}), Low ({})'
-                                 .format(true_label, scores[0], scores[1], scores[2])) # scores[class_index]
+                ax.set_title('Enrollment Id: {} True Value: {}\nScores: High ({}), Med ({}), Low ({})'
+                                 .format(e_id, true_label, scores[0], scores[2], scores[1])) # scores[class_index]
             else:
 
-                plt.title('True Value: {}\nScores: High ({}), Med ({}), Low ({})'
+                plt.title('Enrollment Id: {} True Value: {}\nScores: High ({}), Med ({}), Low ({})'
 
-                              .format(true_label, scores[0], scores[1], scores[2])) # scores[class_index]
+                              .format(e_id, true_label, scores[0], scores[2], scores[1])) # scores[class_index]
 
             # Returns obs_contrib_df (flipped back), true labels, and scores 
 
@@ -471,11 +472,11 @@ def plot_single_feat_contrib(feat_name, contributions, features_df,
 
             ax = kwargs['ax']
 
-            ax.plot(x_l, y_l, c='black')
+            ax.plot(x_l, y_l, c='yellow')
 
         else:
 
-            plt.plot(x_l, y_l, c='black')
+            plt.plot(x_l, y_l, c='yellow')
 
     # Get the index of the feature
 
@@ -744,7 +745,7 @@ Y_train_resampled = Y_train
 
 # Test options for cross validation and evaluation (socring) metric
 num_folds = 10
-scoring = 'recall_macro' #make_scorer(hrd_custom_loss_func) # 'recall' 'recall_macro'
+scoring = make_scorer(hrd_custom_loss_func) # 'recall' 'recall_macro'
 class_weight = class_weight.compute_class_weight('balanced', np.unique(Y_train_resampled), Y_train_resampled)
 
 #print("% of +class in original data: {}%".format(100*sum(df['Target'])/float(len(df['Target']))))
@@ -757,7 +758,7 @@ print(sorted(Counter(Y_train_resampled).items()))
 # Algorithm tuning for best scaled ML candidate
 # Best candidate so far: ScaledRFC -- now searching for best configuration
 #####################################################################################################
-n_features = 100
+n_features = 1000
 
 # Tune scaled top model performer
 scaler = MinMaxScaler(feature_range=(0, 1)).fit(X_train_resampled)
@@ -932,8 +933,9 @@ print('Stop 2 of 5')
 #
 # Integer representing which observation we would like to examine feature contributions
 # for classification
-#
-observation_index = df.loc[ df['Enrollment/Term']  == '67140707-1' ].index.values.astype(int)[0]
+# 
+e_id = '81276600-1' #'7505327-1' #'83500580-1' #'67140707-1' '81276600-1'
+observation_index = df.loc[ df['Enrollment/Term']  == e_id ].index.values.astype(int)[0]
 #observation_index = 1669 #1397 #425
 
 rescaledValidationX_one = scaler.transform(df[train_cols].iloc[observation_index:observation_index+1])
@@ -955,7 +957,8 @@ rescaledX_Total = selector.transform(rescaledX_Total)
 
 dt_multi_pred, dt_multi_bias, dt_multi_contrib = ti.predict(model, rescaledX_Total) #pd.Series(Y['Target']
 plot_obs_feature_contrib(model, dt_multi_contrib, X[selected_features], Y, 
-						 index=observation_index, class_index=class_index, num_features=15, order_by='contribution', violin=True, class_scores=class_scores)
+						 index=observation_index, class_index=class_index, num_features=15, 
+                         order_by='contribution', violin=True, class_scores=class_scores, e_id=e_id)
 
 #plt.show()
 print('Stop 3 of 5')
@@ -978,7 +981,7 @@ class_names = ['Risk = {}'.format(s) for s in ('High', 'Low', 'Med')]
 
 # Name of feature for examining all its values in relatio to its importances
 # for classifications
-feat_name_ = 'Partner - Total Escalated Deals'
+feat_name_ = 'Enrollment Contract Value' #'Customized Amendment' #'SOE_Revenue%' #'Enrollment Contract Value' #'Partner - Total Escalated Deals'
 
 #for i in range(len(colours)):
 #    plot_single_feat_contrib(feat_name_, dt_multi_contrib, X_test[selected_features],
