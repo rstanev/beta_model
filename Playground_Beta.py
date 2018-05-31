@@ -703,7 +703,7 @@ df = pd.get_dummies(df, columns = ['Quarter', 'Subsidiary', 'Sector', 'GeoRiskTi
 								   'Deal Revenue Tier', 'Renewal vs New', 'Cloud vs On-Prem', 
 								   'ATUName', 'Type', 'Pull Forward Type', 'Pull Forward Period',
 								   'Platform vs Component', 'SOE Flag',
-								   'Government Entity'])
+								   'Government Entity', 'PartnerOneID'])
 
 print('df shape after dummies: ', df.shape)
 colnames = df.columns.values
@@ -745,7 +745,7 @@ Y_train_resampled = Y_train
 
 # Test options for cross validation and evaluation (socring) metric
 num_folds = 10
-scoring = make_scorer(hrd_custom_loss_func) # 'recall' 'recall_macro'
+scoring = 'recall_micro' #make_scorer(hrd_custom_loss_func) # 'recall' 'recall_macro'
 class_weight = class_weight.compute_class_weight('balanced', np.unique(Y_train_resampled), Y_train_resampled)
 
 #print("% of +class in original data: {}%".format(100*sum(df['Target'])/float(len(df['Target']))))
@@ -758,7 +758,7 @@ print(sorted(Counter(Y_train_resampled).items()))
 # Algorithm tuning for best scaled ML candidate
 # Best candidate so far: ScaledRFC -- now searching for best configuration
 #####################################################################################################
-n_features = 1000
+n_features = 100
 
 # Tune scaled top model performer
 scaler = MinMaxScaler(feature_range=(0, 1)).fit(X_train_resampled)
@@ -775,13 +775,13 @@ selected_features = df[train_cols].columns[mask]
 #                              {'Med': 6.7, 'High': 95.9, 'Low': 0.35}, 
 #                              'balanced', None], 
 #                              'min_samples_leaf':[10]}
-param_grid = {'class_weight':['balanced'], 'min_samples_leaf':[10]}
+param_grid = {'class_weight':[{'Med': 10, 'High': 100, 'Low': 1}], 'n_estimators':[100]}
 
 # {'Med': 20, 'High': 100, 'Low': 1}, {'Med': 5, 'High': 200, 'Low': 1}, {'Med': 20, 'High': 100, 'Low': 0.5}, 
                               
 
-model = DecisionTreeClassifier()
-#model = RandomForestClassifier()
+#model = DecisionTreeClassifier()
+model = RandomForestClassifier()
 
 kfold = KFold(n_splits=num_folds, random_state=seed)
 grid = GridSearchCV(estimator=model, param_grid=param_grid, scoring=scoring, cv=kfold)
@@ -794,8 +794,8 @@ params = grid_result.cv_results_['params']
 for mean, stdev, param in zip(means, stds, params):
     print("%f (%f) with: %r" % (mean, stdev, param))
 
-#model = RandomForestClassifier(**grid_result.best_params_) #(n_estimators=100, class_weight='balanced') #(**grid_result.best_params_)
-model = DecisionTreeClassifier(**grid_result.best_params_) #(class_weight='balanced', min_samples_leaf=10)
+model = RandomForestClassifier(**grid_result.best_params_) #(n_estimators=100, class_weight='balanced') #(**grid_result.best_params_)
+#model = DecisionTreeClassifier(**grid_result.best_params_) #(class_weight='balanced', min_samples_leaf=10)
 model.fit(rescaledX, Y_train_resampled)
 #model_.fit(rescaledX, Y_train_resampled)
 #print('Confusion matrix based on Training set:')
@@ -934,7 +934,7 @@ print('Stop 2 of 5')
 # Integer representing which observation we would like to examine feature contributions
 # for classification
 # 
-e_id = '81276600-1' #'7505327-1' #'83500580-1' #'67140707-1' '81276600-1'
+e_id = '64606482-1' #'81276600-1' #'7505327-1' #'83500580-1' #'67140707-1' '81276600-1'
 observation_index = df.loc[ df['Enrollment/Term']  == e_id ].index.values.astype(int)[0]
 #observation_index = 1669 #1397 #425
 
