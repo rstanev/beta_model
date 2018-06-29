@@ -1,6 +1,6 @@
 ############################################################################################################
 # High Risk Deals - beta model
-# Checked-in: 06/26/2018 -- 6:00 pm (UTC-7)
+# Checked-in: 06/29/2018 -- 11:00 am (UTC-7)
 # GOAL:
 # Build ML model to classify and assign probability of high risk, flag, low risk, for each deal, 
 # -- ultimately scoring 'unseen' deals and providing interpretability of results.
