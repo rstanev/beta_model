@@ -31,9 +31,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
 import re
-import shap
-import lime
-import lime.lime_tabular
 #import graphviz
 #from imblearn.combine import SMOTEENN
 from scipy import stats 
@@ -65,6 +62,7 @@ from collections import Counter
 from treeinterpreter import treeinterpreter as ti
 from pygam import LogisticGAM
 from pygam.utils import generate_X_grid
+#from IPython.display import HTML
 import sys
 sys.path.insert(0, "C:\\Users\\v-rostan\\ds")
 from beta_model import Feature_Intel as INTEL
@@ -152,6 +150,18 @@ loss = make_scorer(hrd_custom_loss_func, greagter_is_better = False)
 
 # ML model to create: 0 (Greedy), 1 (Intelligible), 2 (Ethical)
 ML_MODEL = 1
+
+if ML_MODEL == 0: # Greedy
+
+    ML_MODEL_NAME = 'Greedy'
+
+elif ML_MODEL == 1: # Intelligible
+
+    ML_MODEL_NAME = 'Intelligible'
+
+elif ML_MODEL == 2: # Ethical
+
+    ML_MODEL_NAME = 'Ethical'
 
 source_file = "C:\\Users\\v-rostan\\ds\\Fact_HRDEA_DS_05182018.csv"
 data = read_csv(source_file, encoding = "ISO-8859-1")
@@ -302,8 +312,9 @@ df.loc[ (df['DiscountIsLessOrEquvaltoFramework'] == 0) & (df['IsFrameWorkAvailal
 who_is_target = 'MultiClass' # 'Escalated'
 df[who_is_target] = 'Empty'
 
-df.loc[ (df['OLC'] == 1), 'MultiClass'] = 'High'
-df.loc[ (df['LCC'] == 1), 'MultiClass'] = 'High'
+#df.loc[ (df['OLC'] == 1), 'MultiClass'] = 'High' # OBS.: Post-MLADS def. of High Risk
+#df.loc[ (df['LCC'] == 1), 'MultiClass'] = 'High' # OBS.: Post-MLADS def. of High Risk
+df.loc[ (df['Escalated'] == 1), 'MultiClass'] = 'High'
 df.loc[ (df['Flagged'] == 1) & (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Med'
 df.loc[ (df['MultiClass'] == 'Empty'), 'MultiClass'] = 'Low'
 df.loc[ (df['Flagged In HRDD'] == 1) & (df['Escalated'] != 1), 'MultiClass'] = 'Med'
@@ -386,10 +397,30 @@ X_train, X_test, Y_train, Y_test = train_test_split(X,
 X_train_resampled = X_train
 Y_train_resampled = Y_train
 
-# Test options for cross validation and evaluation (socring) metric
+# Default test options for cross validation and evaluation (socring) metric
 num_folds = 10
-scoring = 'recall_micro' #make_scorer(hrd_custom_loss_func) # 'recall' 'recall_macro'
+n_features = 100
+
+#scoring = 'recall_micro' #make_scorer(hrd_custom_loss_func) # 'recall' 'recall_macro'
 class_weight = class_weight.compute_class_weight('balanced', np.unique(Y_train_resampled), Y_train_resampled)
+
+if ML_MODEL == 0: # Greedy
+    scoring = 'recall_macro'
+    n_features = 1000
+    param_grid = {'class_weight': ['balanced'], 'min_samples_leaf': [10]} # Model Config ID 38 (a.k.a MLADS 2018)
+    model = DecisionTreeClassifier(random_state=seed)
+
+elif ML_MODEL == 1: # Intelligible
+    scoring = 'recall_micro'
+    n_features = 1000
+    param_grid = {'class_weight': ['balanced'], 'min_samples_leaf': [10]} # Model Config ID 18 (a.k.a MLADS 2018)
+    model = DecisionTreeClassifier(random_state=seed)
+
+elif ML_MODEL == 2: # Ethical
+    scoring = make_scorer(hrd_custom_loss_func)
+    n_features = 100
+    param_grid = {'class_weight': ['balanced'], 'min_samples_leaf': [10]} # Model Config ID 47 (a.k.a MLADS 2018)
+    model = RandomForestClassifier(random_state=seed)
 
 #print("% of +class in original data: {}%".format(100*sum(df['Target'])/float(len(df['Target']))))
 #print("% of +class in resampled training: {}%".format(100*sum(Y_train_resampled)/float(len(Y_train_resampled))))
@@ -401,7 +432,6 @@ print(sorted(Counter(Y_train_resampled).items()))
 # Algorithm tuning for best scaled ML candidate
 # Best candidate so far: ScaledRFC -- now searching for best configuration
 #####################################################################################################
-n_features = 100
 #for iii in range(5):
 # Tune scaled top model performer
 scaler = MinMaxScaler(feature_range=(0, 1)).fit(X_train_resampled)
@@ -420,11 +450,11 @@ selected_features = df[train_cols].columns[mask]
 #                              'min_samples_leaf':[10]}
 #param_grid = {'class_weight':[{'Med': 10, 'High': 100, 'Low': 1}, {'Med': 6.7, 'High': 95.9, 'Low': 0.35}, 'balanced', None], 
 #              'min_samples_leaf':[5, 10, 20]}
-param_grid = {'class_weight': ['balanced'], 'min_samples_leaf': [10]}
+#param_grid = {'class_weight': ['balanced'], 'min_samples_leaf': [10]}
 # {'Med': 20, 'High': 100, 'Low': 1}, {'Med': 5, 'High': 200, 'Low': 1}, {'Med': 20, 'High': 100, 'Low': 0.5}, 
                               
 
-model = DecisionTreeClassifier(random_state=seed)
+#model = DecisionTreeClassifier(random_state=seed)
 #model = RandomForestClassifier()
 
 kfold = KFold(n_splits=num_folds, random_state=seed)
@@ -438,9 +468,23 @@ params = grid_result.cv_results_['params']
 for mean, stdev, param in zip(means, stds, params):
     print("%f (%f) with: %r" % (mean, stdev, param))
 
-#model = RandomForestClassifier(**grid_result.best_params_) #(n_estimators=100, class_weight='balanced') #(**grid_result.best_params_)
-model = DecisionTreeClassifier(**grid_result.best_params_, random_state=seed) #(class_weight='balanced', min_samples_leaf=10)
+if ML_MODEL == 0: # Greedy
+    
+    model = DecisionTreeClassifier(**grid_result.best_params_, random_state=seed)
+
+elif ML_MODEL == 1: # Intelligible
+
+    model = DecisionTreeClassifier(**grid_result.best_params_, random_state=seed)
+
+elif ML_MODEL == 2: # Ethical
+
+    model = RandomForestClassifier(**grid_result.best_params_, random_state=seed)
+
+#model = RandomForestClassifier(**grid_result.best_params_)
+#model = DecisionTreeClassifier(**grid_result.best_params_, random_state=seed) #(class_weight='balanced', min_samples_leaf=10)
+
 model.fit(rescaledX, Y_train_resampled)
+
 #model_.fit(rescaledX, Y_train_resampled)
 #print('Confusion matrix based on Training set:')
 #predictions = model.predict(rescaledX)
@@ -450,7 +494,7 @@ model.fit(rescaledX, Y_train_resampled)
 
 # Estimate accuracy on validation (test 'unseen') dataset
 # print('iii: ' + str(iii))
-print('Confusion matrix based on Unseen (test) set: ----------------------------')
+print(ML_MODEL_NAME + ' Confusion matrix based on Unseen (test) set: ----------------------------')
 rescaledValidationX = scaler.transform(X_test)
 rescaledValidationX = selector.transform(rescaledValidationX)
 predictions = model.predict(rescaledValidationX)
@@ -469,18 +513,27 @@ v_df = data.loc[Y_test.index]
 v_df['Prediction'] = predictions
 v_df = v_df.merge(pd.DataFrame(Y_test), how='inner', validate='one_to_one', left_index=True, right_index=True)
 # Output - saving to file
-if ML_MODEL == 0:
-    fname = 'greedy'
-elif ML_MODEL == 1:
-    fname = 'intelligible'
-elif ML_MODEL == 2:
-    fname = 'ethical'
 
-v_df.to_csv("C:\\Users\\v-rostan\\" + fname + "_beta_df.csv")
+v_df.to_csv("C:\\Users\\v-rostan\\" + ML_MODEL_NAME + "_beta_df.csv")
 #
 #df.to_csv("C:\\Users\\v-rostan\\beta_df.csv")
 #X_test.to_csv("C:\\Users\\v-rostan\\beta_X_test.csv")
 
+# LIME
+explainer = INTEL.lime.lime_tabular.LimeTabularExplainer(rescaledX, feature_names=selected_features, 
+                                                   class_names=['High', 'Low', 'Med'], discretize_continuous=False)
+e_id = '81276600-1' #'67140707-1' #'64606482-1' #'81276600-1' #'7505327-1' #'83500580-1'      
+observation_index = df.loc[ df['Enrollment/Term']  == e_id ].index.values.astype(int)[0]
+rescaledValidationX_one = scaler.transform(df[train_cols].iloc[observation_index:observation_index+1])
+rescaledValidationX_one = selector.transform(rescaledValidationX_one)
+class_result = model.predict(rescaledValidationX_one)
+class_scores = model.predict_proba(rescaledValidationX_one)
+
+exp = explainer.explain_instance(rescaledValidationX_one[0], model.predict_proba, num_features=10, top_labels=3)
+exp.show_in_notebook(show_table=True, show_all=False) #IPython.core.display.HTML
+#print(exp.local_exp)
+exp.save_to_file("C:\\Users\\v-rostan\\" + ML_MODEL_NAME + "_exp_.html")
+#plt.show(exp.show_in_notebook(show_table=True, show_all=False))
 ####################################################################################################
 # Summarizing the number of manually flagged deals that the classifier was able to properly identify
 # note: should turn this into a function ---
@@ -504,7 +557,7 @@ np.set_printoptions(precision=2)
 # Plot normalized confusion matrix
 plt.figure()
 plot_confusion_matrix(cm, classes=['High', 'Med', 'Low'], normalize=True,
-                      title='HRD normalized confusion matrix')
+                      title=ML_MODEL_NAME + ' HRD normalized confusion matrix')
 plt.show()
         
 ######################################################################################################
@@ -520,8 +573,14 @@ selected_features = X_train.columns[mask]
 features = selected_features
 
 # Feature importance selection and plot
-m_id = 'Model id: 18 - '
-k = 15; plt.title(m_id + 'Feature Importances: DecisionTreeClassifier - no synthetic sampling - 1K top features : f_classif')
+m_id = ML_MODEL_NAME + ' Model: '
+
+if isinstance(model, DecisionTreeClassifier):
+    ML_MODEL_TYPE = 'DecisionTreeClassifier'
+elif isinstance(model, RandomForestClassifier):
+    ML_MODEL_TYPE = 'RandomForestClassifier'
+
+k = 15; plt.title(m_id + 'Feature Importances: ' + ML_MODEL_TYPE + ' - no synthetic sampling - ' + str(n_features) + ' top features : f_classif')
 plt.barh(range(len(indices[:k])), importances[indices[:k]], color='b', align='center')
 plt.yticks(range(len(indices[:k])), features[indices[:k]])
 plt.xlabel('relative importance')
@@ -587,7 +646,7 @@ print('Stop 2 of 5')
 # Integer representing which observation we would like to examine feature contributions
 # for classification
 # 
-e_id = '67140707-1' #'64606482-1' #'81276600-1' #'7505327-1' #'83500580-1'      
+#e_id = '81276600-1' #'67140707-1' #'64606482-1' #'81276600-1' #'7505327-1' #'83500580-1'      
 observation_index = df.loc[ df['Enrollment/Term']  == e_id ].index.values.astype(int)[0]
 #observation_index = 1669 #1397 #425
 
